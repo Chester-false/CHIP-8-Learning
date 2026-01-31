@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include <stdint.h> // 引入 uint8_t 这种标准类型
 
@@ -61,13 +62,63 @@ void init_cpu(Chip8 *cpu) {
     memset(cpu->stack, 0, sizeof(cpu->stack));
     memset(cpu->key, 0, sizeof(cpu->key));
 }
+// === 新增：加载 ROM 函数 ===
+bool load_rom(Chip8 *cpu, const char *filename) {
+    printf("Loading: %s\n", filename);
 
-int main(int argc, const char argv[]){
-    Chip8 cpu;       // 造一台机器
-    init_cpu(&cpu);  // 开机初始化
+    // 1. 打开文件 (rb = read binary)
+    FILE *f = fopen(filename, "rb");
+    if (f == NULL) {
+        printf("Error: Failed to open file\n");
+        return false;
+    }
+
+    // 2. 获取文件大小
+    fseek(f, 0, SEEK_END); // 光标移到末尾
+    long size = ftell(f);  // 告诉我当前位置 (即文件大小)
+    rewind(f);             // 光标回到开头
+
+    printf("File size: %ld bytes\n", size);
+
+    // 3. 检查文件是否太大 (内存只有 4096，前 512 被占用了，所以剩 3584)
+    if (size > (4096 - 512)) {
+        printf("Error: ROM is too big!\n");
+        fclose(f); // 别忘了关文件
+        return false;
+    }
+
+    // 4. 读取文件内容到内存
+    // fread(目标地址, 每个块多大, 读几块, 文件指针)
+    // 目标地址是 &cpu->memory[0x200]，也就是从第 512 个格子开始填
+    fread(&cpu->memory[0x200], 1, size, f);
+
+    // 5. 收尾
+    fclose(f);
+    return true;
+}
+
+// === 修改：Main 函数 ===
+int main(int argc, char *argv[]) {
+    // 检查用户有没有输入文件名
+    // argc 是参数个数，argv 是参数列表
+    // ./chip8 "pong.ch8" -> argc=2, argv[0]="./chip8", argv[1]="pong.ch8"
+    if (argc < 2) {
+        printf("Usage: %s <rom_file>\n", argv[0]);
+        return 1;
+    }
+
+    Chip8 cpu;
+    init_cpu(&cpu);
+
+    // 加载 ROM
+    // 如果加载失败，就退出程序
+    if (!load_rom(&cpu, argv[1])) {
+        return 1;
+    }
     
-    // 打印出来看看，证明我们成功了
-    printf("CPU Initialized.\n");
-    printf("PC (Program Counter) is at: 0x%X\n", cpu.pc); // %X 是以16进制打印
+    printf("ROM loaded successfully.\n");
+    
+    // 我们暂时还没有循环，所以这里程序就结束了
+    // 下一步我们会在这里加 while 循环
     return 0;
 }
